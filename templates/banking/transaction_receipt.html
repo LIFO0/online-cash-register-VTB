@@ -1,0 +1,119 @@
+{% extends "banking/base.html" %}
+{% block title %}Квитанция {{ transaction.reference }}{% endblock %}
+{% block messages %}{% endblock %}
+{% block footer %}
+<footer class="footer">
+    {% now "Y" as current_year %}
+    <span>© {{ current_year }} Онлайн-касса ВТБ</span>
+    <span class="footer__note">
+        {% if user.is_staff %}
+            Разработчик приложения: Рыженкова Валерия
+        {% else %}
+            Связаться с администратором: +7 (900) 555-25-25
+        {% endif %}
+    </span>
+</footer>
+{% endblock %}
+{% block content %}
+<section class="card card--wide">
+    <h1 class="card__title">Операция завершена</h1>
+    <p class="card__subtitle">Номер операции: <strong>{{ transaction.reference }}</strong></p>
+    <dl class="receipt">
+        <div class="receipt__row">
+            <dt>Статус</dt>
+            <dd>
+                {% if transaction.status == 'completed' %}
+                    <span class="badge badge--success">Завершена</span>
+                {% elif transaction.status == 'pending' %}
+                    <span class="badge badge--warning">В обработке</span>
+                {% else %}
+                    <span class="badge badge--danger">Отменена</span>
+                {% endif %}
+            </dd>
+        </div>
+        <div class="receipt__row">
+            <dt>Тип операции</dt>
+            <dd>{{ transaction.get_transaction_type_display }}</dd>
+        </div>
+        <div class="receipt__row">
+            <dt>Сумма</dt>
+            <dd>
+                {% if transaction.transaction_type == 'withdrawal' or transaction.transaction_type == 'transfer_out' %}-{% endif %}
+                {{ transaction.amount }} ₽
+            </dd>
+        </div>
+        <div class="receipt__row">
+            <dt>Счёт</dt>
+            <dd>{{ transaction.account.account_number }}</dd>
+        </div>
+        {% if transaction.transaction_type == 'transfer_out' or transaction.transaction_type == 'transfer_in' %}
+            <div class="receipt__row">
+                <dt>
+                    {% if transaction.transaction_type == 'transfer_out' %}
+                        Счёт получателя
+                    {% else %}
+                        Счёт отправителя
+                    {% endif %}
+                </dt>
+                <dd>
+                    {% with cp=transaction.counterparty_account %}
+                        {% if cp %}
+                            {{ cp.account_number }}
+                        {% else %}
+                            —
+                        {% endif %}
+                    {% endwith %}
+                </dd>
+            </div>
+        {% endif %}
+        <div class="receipt__row">
+            <dt>Баланс после операции</dt>
+            <dd>{{ transaction.account.balance }} ₽</dd>
+        </div>
+        <div class="receipt__row">
+            <dt>Дата создания</dt>
+            <dd>
+                <div>{{ transaction.created_at|date:"d.m.Y" }}</div>
+                <div>{{ transaction.created_at|date:"H:i" }}</div>
+            </dd>
+        </div>
+        <div class="receipt__row">
+            <dt>Дата обработки</dt>
+            <dd>
+                {% if transaction.processed_at %}
+                    <div>{{ transaction.processed_at|date:"d.m.Y" }}</div>
+                    <div>{{ transaction.processed_at|date:"H:i" }}</div>
+                {% else %}
+                    — 
+                {% endif %}
+            </dd>
+        </div>
+        <div class="receipt__row">
+            <dt>Осуществил</dt>
+            <dd>{{ transaction.performed_by.full_name|default:"—" }}</dd>
+        </div>
+        {% if transaction.note %}
+            <div class="receipt__row">
+                <dt>Комментарий</dt>
+                <dd>{{ transaction.note }}</dd>
+            </div>
+        {% endif %}
+    </dl>
+    {% if user.is_staff and transaction.status != 'cancelled' %}
+        <form method="post" action="{% url 'banking:admin_cancel_transaction' transaction.pk %}" class="actions">
+            {% csrf_token %}
+            <button class="button button--danger">Отменить транзакцию</button>
+            <a class="button button--ghost" href="{% url 'banking:admin_dashboard' %}">Вернуться на главную</a>
+        </form>
+    {% else %}
+        <div class="actions">
+            {% if user.is_staff %}
+                <a class="button button--secondary" href="{% url 'banking:admin_dashboard' %}">Вернуться на главную</a>
+            {% else %}
+                <a class="button button--secondary" href="{% url 'banking:client_dashboard' %}">Вернуться в личный кабинет</a>
+            {% endif %}
+        </div>
+    {% endif %}
+</section>
+{% endblock %}
+

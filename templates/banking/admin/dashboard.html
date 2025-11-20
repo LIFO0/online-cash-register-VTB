@@ -1,0 +1,702 @@
+{% extends "banking/base.html" %}
+{% load static %}
+{% block title %}Админ-панель{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/admin_dashboard.css' %}">
+{% endblock %}
+{% block body_class %}body--admin-dashboard{% endblock %}
+{% block layout_classes %}layout--admin-dashboard{% endblock %}
+{% block content_classes %}content--admin-dashboard{% endblock %}
+{% block messages %}{% endblock %}
+{% block footer %}
+<footer class="footer">
+    {% now "Y" as current_year %}
+    <span>© {{ current_year }} Онлайн-касса ВТБ</span>
+    <span class="footer__note">Разработчик приложения: Рыженкова Валерия</span>
+</footer>
+{% endblock %}
+{% block content %}
+<div class="admin-dashboard">
+    <aside class="admin-sidebar">
+        <div class="admin-sidebar__title">Административная панель</div>
+        <nav class="admin-sidebar__nav">
+            <a href="#overview" class="admin-sidebar__link is-active">
+                <img src="{% static 'images/main.png' %}" alt="" class="admin-sidebar__link-icon">
+                <span>Обзор</span>
+            </a>
+            <a href="#clients-accounts" class="admin-sidebar__link">
+                <img src="{% static 'images/account.png' %}" alt="" class="admin-sidebar__link-icon">
+                <span>Клиенты и счета</span>
+            </a>
+            <a href="#transactions" class="admin-sidebar__link">
+                <img src="{% static 'images/operation.png' %}" alt="" class="admin-sidebar__link-icon">
+                <span>Транзакции</span>
+            </a>
+        </nav>
+    </aside>
+
+    <main class="admin-main">
+        {% with total_clients=total_clients_count total_accounts=accounts|length total_transactions=total_transactions_count %}
+        <section id="overview" class="admin-hero">
+            <div class="admin-hero__grid">
+                <div class="admin-hero__card">
+                    <h1 class="admin-hero__title">Административная панель</h1>
+                    <p class="admin-hero__subtitle">
+                        Контроль клиентов, счетов и транзакций в реальном времени. Все операции фиксируются с указанием исполнителя и времени.
+                    </p>
+                    <div class="admin-metrics">
+                        <div class="admin-metric">
+                            <div class="admin-metric__label">Клиентов</div>
+                            <div class="admin-metric__value">{{ total_clients }}</div>
+                        </div>
+                        <div class="admin-metric">
+                            <div class="admin-metric__label">Счетов</div>
+                            <div class="admin-metric__value">{{ total_accounts }}</div>
+                        </div>
+                        <div class="admin-metric">
+                            <div class="admin-metric__label">Транзакций</div>
+                            <div class="admin-metric__value">{{ total_transactions }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        {% endwith %}
+
+        <section id="clients-accounts" class="admin-panel">
+            <div class="admin-panel__header">
+                <div>
+                    <h2 class="admin-panel__title">Клиенты и счета</h2>
+                    <p class="admin-panel__subtitle">Управление клиентскими профилями и банковскими счетами</p>
+                </div>
+            </div>
+            <form method="get" class="admin-filter admin-filter--clients" id="client-filter-form">
+                {% for key, value in request.GET.items %}
+                    {% if key != 'search' and key != 'is_blocked' and key != 'client_page' %}
+                        <input type="hidden" name="{{ key }}" value="{{ value }}">
+                    {% endif %}
+                {% endfor %}
+                <div class="form-field">
+                    {{ client_filter_form.search.label_tag }}
+                    {{ client_filter_form.search }}
+                </div>
+                <div class="form-field">
+                    {{ client_filter_form.is_blocked.label_tag }}
+                    {{ client_filter_form.is_blocked }}
+                </div>
+                <div class="admin-filter__actions">
+                    <button class="button button--secondary">Применить</button>
+                    <a class="button button--ghost" href="{% url 'banking:admin_dashboard' %}">Сбросить</a>
+                </div>
+            </form>
+            <div id="clients-content" data-clients-section>
+            {% if clients.paginator.count > 0 %}
+                <div class="admin-clients-info">
+                    <span class="admin-clients-info__text">
+                        Показано {{ clients.start_index }}–{{ clients.end_index }} из {{ clients.paginator.count }} клиентов
+                    </span>
+                </div>
+            {% endif %}
+            <div class="admin-clients-grid">
+                {% for client in clients %}
+                    <div class="admin-client-card">
+                        <div class="admin-client-card__header">
+                            <div class="admin-client-card__info">
+                                <div class="admin-client-card__name">{{ client.full_name }}</div>
+                                <div class="admin-client-card__meta">ID: {{ client.id }} · Логин: {{ client.user.username }}</div>
+                            </div>
+                            <div class="admin-client-card__status">
+                                {% if client.is_effectively_blocked %}
+                                    <span class="badge badge--danger">Заблокирован</span>
+                                {% else %}
+                                    <span class="badge badge--success">Активен</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="admin-client-card__accounts">
+                            {% with client_accounts=client.accounts.all %}
+                                {% if client_accounts %}
+                                    {% for account in client_accounts %}
+                                        <div class="admin-account-item">
+                                            <div class="admin-account-item__info">
+                                                <div class="admin-account-item__number">{{ account.account_number }}</div>
+                                                <div class="admin-account-item__balance">Баланс: {{ account.balance|floatformat:2 }} ₽</div>
+                                            </div>
+                                            <div class="admin-account-item__actions">
+                                                <form method="post" action="{% url 'banking:toggle_account_block' account.pk %}">
+                                                    {% csrf_token %}
+                                                    {% if account.is_blocked %}
+                                                        <button class="button button--success button--small">Разблокировать</button>
+                                                    {% else %}
+                                                        <button class="button button--danger button--small">Заблокировать</button>
+                                                    {% endif %}
+                                                </form>
+                                            </div>
+                                        </div>
+                                    {% endfor %}
+                                {% else %}
+                                    <div class="admin-account-item admin-account-item--empty">
+                                        <div class="admin-list__muted">У клиента нет счетов</div>
+                                    </div>
+                                {% endif %}
+                            {% endwith %}
+                        </div>
+                    </div>
+                {% empty %}
+                    <div class="admin-empty">Клиенты не найдены. Попробуйте изменить параметры поиска.</div>
+                {% endfor %}
+            </div>
+            {% if clients.has_other_pages %}
+                <div class="admin-pagination">
+                    {% if clients.has_previous %}
+                        <form method="get" style="display: inline;">
+                            {% for key, value in request.GET.items %}
+                                {% if key != 'client_page' %}
+                                    <input type="hidden" name="{{ key }}" value="{{ value }}">
+                                {% endif %}
+                            {% endfor %}
+                            <input type="hidden" name="client_page" value="{{ clients.previous_page_number }}">
+                            <button type="submit" class="admin-pagination__link admin-pagination__link--prev">‹ Предыдущая</button>
+                        </form>
+                    {% else %}
+                        <span class="admin-pagination__link admin-pagination__link--disabled">‹ Предыдущая</span>
+                    {% endif %}
+                    
+                    <div class="admin-pagination__pages">
+                        {% with current=clients.number total=clients.paginator.num_pages %}
+                            {% if current != 1 %}
+                                <form method="get" style="display: inline;">
+                                    {% for key, value in request.GET.items %}
+                                        {% if key != 'client_page' %}
+                                            <input type="hidden" name="{{ key }}" value="{{ value }}">
+                                        {% endif %}
+                                    {% endfor %}
+                                    <input type="hidden" name="client_page" value="1">
+                                    <button type="submit" class="admin-pagination__page">1</button>
+                                </form>
+                            {% else %}
+                                <span class="admin-pagination__page admin-pagination__page--active">1</span>
+                            {% endif %}
+                            
+                            {% if current > 4 %}
+                                <span class="admin-pagination__ellipsis">…</span>
+                            {% endif %}
+                            
+                            {% for num in clients.paginator.page_range %}
+                                {% if num > 1 and num < total %}
+                                    {% if num >= current|add:'-2' and num <= current|add:'2' %}
+                                        {% if num == current %}
+                                            <span class="admin-pagination__page admin-pagination__page--active">{{ num }}</span>
+                                        {% else %}
+                                            <form method="get" style="display: inline;">
+                                                {% for key, value in request.GET.items %}
+                                                    {% if key != 'client_page' %}
+                                                        <input type="hidden" name="{{ key }}" value="{{ value }}">
+                                                    {% endif %}
+                                                {% endfor %}
+                                                <input type="hidden" name="client_page" value="{{ num }}">
+                                                <button type="submit" class="admin-pagination__page">{{ num }}</button>
+                                            </form>
+                                        {% endif %}
+                                    {% endif %}
+                                {% endif %}
+                            {% endfor %}
+                            
+                            {% if current < total|add:'-3' %}
+                                <span class="admin-pagination__ellipsis">…</span>
+                            {% endif %}
+                            
+                            {% if total > 1 %}
+                                {% if current != total %}
+                                    <form method="get" style="display: inline;">
+                                        {% for key, value in request.GET.items %}
+                                            {% if key != 'client_page' %}
+                                                <input type="hidden" name="{{ key }}" value="{{ value }}">
+                                            {% endif %}
+                                        {% endfor %}
+                                        <input type="hidden" name="client_page" value="{{ total }}">
+                                        <button type="submit" class="admin-pagination__page">{{ total }}</button>
+                                    </form>
+                                {% else %}
+                                    <span class="admin-pagination__page admin-pagination__page--active">{{ total }}</span>
+                                {% endif %}
+                            {% endif %}
+                        {% endwith %}
+                    </div>
+                    
+                    {% if clients.has_next %}
+                        <form method="get" style="display: inline;">
+                            {% for key, value in request.GET.items %}
+                                {% if key != 'client_page' %}
+                                    <input type="hidden" name="{{ key }}" value="{{ value }}">
+                                {% endif %}
+                            {% endfor %}
+                            <input type="hidden" name="client_page" value="{{ clients.next_page_number }}">
+                            <button type="submit" class="admin-pagination__link admin-pagination__link--next">Следующая ›</button>
+                        </form>
+                    {% else %}
+                        <span class="admin-pagination__link admin-pagination__link--disabled">Следующая ›</span>
+                    {% endif %}
+                </div>
+            {% endif %}
+            </div>
+        </section>
+
+        <section id="transactions" class="admin-panel admin-panel--transactions">
+            <div class="admin-panel__header">
+                <div>
+                    <h2 class="admin-panel__title">Все транзакции</h2>
+                    <p class="admin-panel__subtitle">Фильтрация и управление операциями</p>
+                </div>
+            </div>
+            <form method="get" class="admin-filter" id="transaction-filter-form">
+                <div class="form-field">
+                    {{ filter_form.date_from.label_tag }}
+                    {{ filter_form.date_from }}
+                </div>
+                <div class="form-field">
+                    {{ filter_form.date_to.label_tag }}
+                    {{ filter_form.date_to }}
+                </div>
+                <div class="form-field">
+                    {{ filter_form.transaction_type.label_tag }}
+                    {{ filter_form.transaction_type }}
+                </div>
+                <div class="form-field">
+                    {{ filter_form.status.label_tag }}
+                    {{ filter_form.status }}
+                </div>
+                <div class="form-field">
+                    {{ filter_form.client.label_tag }}
+                    {{ filter_form.client }}
+                </div>
+                <div class="admin-filter__actions">
+                    <button class="button button--secondary">Применить</button>
+                    <a class="button button--ghost" href="{% url 'banking:admin_dashboard' %}">Сбросить</a>
+                </div>
+            </form>
+            <div id="transactions-content" data-transactions-section>
+            <div class="admin-table-wrapper">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th>Дата</th>
+                            <th>ID операции</th>
+                            <th>Клиент</th>
+                            <th>Тип</th>
+                            <th>Счёт получателя</th>
+                            <th>Сумма</th>
+                            <th>Статус</th>
+                            <th>Комментарий</th>
+                            <th>Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for transaction in transactions %}
+                            <tr>
+                                <td>
+                                    <div>{{ transaction.created_at|date:"d.m.Y" }}</div>
+                                    <div class="admin-table__muted">{{ transaction.created_at|date:"H:i" }}</div>
+                                </td>
+                                <td>
+                                    <a href="{% url 'banking:transaction_receipt' transaction.pk %}" class="table__link">
+                                        {{ transaction.reference }}
+                                    </a>
+                                </td>
+                                <td>
+                                    <strong>{{ transaction.account.client.full_name }}</strong>
+                                    <div class="admin-table__muted">ID: {{ transaction.account.client.id }}</div>
+                                </td>
+                                <td>{{ transaction.get_transaction_type_display }}</td>
+                                <td>
+                                    {% with cp=transaction.counterparty_account %}
+                                        {% if cp %}
+                                            <span class="table__link">{{ cp.account_number }}</span>
+                                        {% else %}
+                                            <span class="admin-table__muted">—</span>
+                                        {% endif %}
+                                    {% endwith %}
+                                </td>
+                                <td>
+                                    <span class="admin-table__amount {% if transaction.transaction_type == 'withdrawal' or transaction.transaction_type == 'transfer_out' %}admin-table__amount--negative{% else %}admin-table__amount--positive{% endif %}">
+                                        {% if transaction.transaction_type == 'withdrawal' or transaction.transaction_type == 'transfer_out' %}−{% else %}+{% endif %}
+                                        {{ transaction.amount|floatformat:2 }} ₽
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if transaction.status == 'completed' %}
+                                        <span class="badge badge--success">Завершена</span>
+                                    {% elif transaction.status == 'pending' %}
+                                        <span class="badge badge--warning">В обработке</span>
+                                    {% else %}
+                                        <span class="badge badge--danger">Отменена</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if transaction.note %}
+                                        <div>{{ transaction.note }}</div>
+                                    {% else %}
+                                        <span class="admin-table__muted">—</span>
+                                    {% endif %}
+                                    <div class="admin-table__muted">
+                                        Исполнитель: {{ transaction.performed_by.full_name|default:'—' }} (ID: {{ transaction.performed_by.id|default:'—' }})
+                                        {% if transaction.processed_at %}
+                                            в {{ transaction.processed_at|date:"H:i" }}
+                                        {% endif %}
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="admin-actions-column">
+                                        <a class="button button--ghost button--small" href="{% url 'banking:transaction_receipt' transaction.pk %}">Детали</a>
+                                        {% if transaction.status != 'cancelled' %}
+                                            <form method="post" action="{% url 'banking:admin_cancel_transaction' transaction.pk %}">
+                                                {% csrf_token %}
+                                                <button class="button button--danger button--small">Отменить</button>
+                                            </form>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                            </tr>
+                        {% empty %}
+                            <tr>
+                                <td colspan="9" class="admin-empty">Транзакции не найдены. Попробуйте изменить фильтры.</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            </div>
+        </section>
+    </main>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const clientsSection = document.getElementById('clients-content');
+    const transactionsSection = document.getElementById('transactions-content');
+    const clientFilterForm = document.getElementById('client-filter-form');
+    const transactionFilterForm = document.getElementById('transaction-filter-form');
+    
+    function getCsrfToken(form) {
+        const formData = new FormData(form);
+        const token = formData.get('csrfmiddlewaretoken');
+        if (token) {
+            return token;
+        }
+        const name = 'csrftoken';
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    
+    function updateSection(section, url, sectionSelector) {
+        if (!section) return Promise.resolve();
+        
+        section.style.opacity = '0.6';
+        section.style.pointerEvents = 'none';
+        section.style.transition = 'opacity 0.2s';
+        
+        return fetch(url, {
+            method: 'GET',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+            }
+        })
+        .then(response => response.text())
+        .then(html => {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+            const newSection = doc.querySelector(sectionSelector);
+            
+            if (newSection) {
+                const sectionTop = section.getBoundingClientRect().top + window.pageYOffset;
+                
+                section.innerHTML = newSection.innerHTML;
+                
+                window.history.pushState({}, '', url);
+                
+                requestAnimationFrame(() => {
+                    const newSectionTop = section.getBoundingClientRect().top + window.pageYOffset;
+                    window.scrollTo({
+                        top: newSectionTop - 100,
+                        behavior: 'smooth'
+                    });
+                });
+                
+                if (sectionSelector === '[data-clients-section]') {
+                    initPaginationHandlers();
+                    initAccountBlockHandlers();
+                } else if (sectionSelector === '[data-transactions-section]') {
+                    initTransactionCancelHandlers();
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка загрузки страницы:', error);
+            window.location.href = url;
+            throw error;
+        })
+        .finally(() => {
+            section.style.opacity = '1';
+            section.style.pointerEvents = 'auto';
+        });
+    }
+    
+    if (clientFilterForm) {
+        clientFilterForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(clientFilterForm);
+            const params = new URLSearchParams();
+            
+            for (const [key, value] of formData.entries()) {
+                if (value) {
+                    params.append(key, value);
+                }
+            }
+            
+            const currentUrl = new URL(window.location);
+            for (const [key, value] of currentUrl.searchParams.entries()) {
+                if (key !== 'search' && key !== 'is_blocked' && key !== 'client_page' && !params.has(key)) {
+                    params.append(key, value);
+                }
+            }
+            
+            params.delete('client_page');
+            
+            const url = window.location.pathname + '?' + params.toString();
+            updateSection(clientsSection, url, '[data-clients-section]');
+        });
+    }
+    
+    if (transactionFilterForm) {
+        transactionFilterForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(transactionFilterForm);
+            const params = new URLSearchParams();
+            
+            for (const [key, value] of formData.entries()) {
+                if (value) {
+                    params.append(key, value);
+                }
+            }
+            
+            const currentUrl = new URL(window.location);
+            for (const [key, value] of currentUrl.searchParams.entries()) {
+                if (key !== 'date_from' && key !== 'date_to' && key !== 'transaction_type' && 
+                    key !== 'status' && key !== 'client' && !params.has(key)) {
+                    params.append(key, value);
+                }
+            }
+            
+            const url = window.location.pathname + '?' + params.toString();
+            updateSection(transactionsSection, url, '[data-transactions-section]');
+        });
+    }
+    
+    function initPaginationHandlers() {
+        if (!clientsSection) return;
+        
+        const paginationForms = clientsSection.querySelectorAll('form[method="get"]');
+        
+        paginationForms.forEach(form => {
+            const newForm = form.cloneNode(true);
+            form.parentNode.replaceChild(newForm, form);
+            
+            newForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const formData = new FormData(newForm);
+                const params = new URLSearchParams();
+                
+                for (const [key, value] of formData.entries()) {
+                    params.append(key, value);
+                }
+                
+                const currentUrl = new URL(window.location);
+                for (const [key, value] of currentUrl.searchParams.entries()) {
+                    if (key !== 'client_page' && !params.has(key)) {
+                        params.append(key, value);
+                    }
+                }
+                
+                const url = window.location.pathname + '?' + params.toString();
+                updateSection(clientsSection, url, '[data-clients-section]');
+            });
+        });
+    }
+    
+    initPaginationHandlers();
+    
+    function initAccountBlockHandlers() {
+        if (!clientsSection) return;
+        
+        const blockForms = clientsSection.querySelectorAll('form[action*="toggle-block"]');
+        
+        blockForms.forEach(form => {
+            const newForm = form.cloneNode(true);
+            form.parentNode.replaceChild(newForm, form);
+            
+            newForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const formData = new FormData(newForm);
+                const url = newForm.action;
+                
+                const button = newForm.querySelector('button');
+                const originalText = button ? button.textContent : '';
+                if (button) {
+                    button.disabled = true;
+                    button.textContent = 'Обработка...';
+                }
+                
+                const csrfToken = getCsrfToken(newForm);
+                fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRFToken': csrfToken
+                    },
+                    body: formData
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success) {
+                        const currentUrl = new URL(window.location);
+                        const params = new URLSearchParams(currentUrl.search);
+                        const clientParams = new URLSearchParams();
+                        for (const [key, value] of params.entries()) {
+                            if (key === 'search' || key === 'is_blocked' || key === 'client_page') {
+                                clientParams.append(key, value);
+                            }
+                        }
+                        const updateUrl = window.location.pathname + (clientParams.toString() ? '?' + clientParams.toString() : '');
+                        updateSection(clientsSection, updateUrl, '[data-clients-section]');
+                    } else {
+                        console.error('Ошибка:', data.message || 'Неизвестная ошибка');
+                        if (button) {
+                            button.disabled = false;
+                            button.textContent = originalText;
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Ошибка при блокировке счета:', error);
+                    if (button) {
+                        button.disabled = false;
+                        button.textContent = originalText;
+                    }
+                    const tempForm = document.createElement('form');
+                    tempForm.method = 'POST';
+                    tempForm.action = url;
+                    const csrfInput = document.createElement('input');
+                    csrfInput.type = 'hidden';
+                    csrfInput.name = 'csrfmiddlewaretoken';
+                    csrfInput.value = csrfToken;
+                    tempForm.appendChild(csrfInput);
+                    document.body.appendChild(tempForm);
+                    tempForm.submit();
+                });
+            });
+        });
+    }
+    
+    function initTransactionCancelHandlers() {
+        if (!transactionsSection) return;
+        
+        const cancelForms = transactionsSection.querySelectorAll('form[action*="cancel"]');
+        
+        cancelForms.forEach(form => {
+            const newForm = form.cloneNode(true);
+            form.parentNode.replaceChild(newForm, form);
+            
+            newForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const formData = new FormData(newForm);
+                const url = newForm.action;
+                
+                const button = newForm.querySelector('button');
+                const originalText = button ? button.textContent : '';
+                if (button) {
+                    button.disabled = true;
+                    button.textContent = 'Отмена...';
+                }
+                
+                const csrfToken = getCsrfToken(newForm);
+                fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRFToken': csrfToken
+                    },
+                    body: formData
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success) {
+                        const currentUrl = new URL(window.location);
+                        const params = new URLSearchParams(currentUrl.search);
+                        const transactionParams = new URLSearchParams();
+                        for (const [key, value] of params.entries()) {
+                            if (key === 'date_from' || key === 'date_to' || key === 'transaction_type' || 
+                                key === 'status' || key === 'client') {
+                                transactionParams.append(key, value);
+                            }
+                        }
+                        const updateUrl = window.location.pathname + (transactionParams.toString() ? '?' + transactionParams.toString() : '');
+                        updateSection(transactionsSection, updateUrl, '[data-transactions-section]');
+                    } else {
+                        console.error('Ошибка:', data.message || 'Неизвестная ошибка');
+                        if (button) {
+                            button.disabled = false;
+                            button.textContent = originalText;
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Ошибка при отмене транзакции:', error);
+                    if (button) {
+                        button.disabled = false;
+                        button.textContent = originalText;
+                    }
+                    const tempForm = document.createElement('form');
+                    tempForm.method = 'POST';
+                    tempForm.action = url;
+                    const csrfInput = document.createElement('input');
+                    csrfInput.type = 'hidden';
+                    csrfInput.name = 'csrfmiddlewaretoken';
+                    csrfInput.value = csrfToken;
+                    tempForm.appendChild(csrfInput);
+                    document.body.appendChild(tempForm);
+                    tempForm.submit();
+                });
+            });
+        });
+    }
+    
+    initAccountBlockHandlers();
+    initTransactionCancelHandlers();
+});
+</script>
+{% endblock %}
+

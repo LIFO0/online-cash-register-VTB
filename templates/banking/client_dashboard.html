@@ -1,0 +1,320 @@
+{% extends "banking/base.html" %}
+{% load static %}
+{% block title %}Мои финансы{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/client_dashboard.css' %}">
+{% endblock %}
+{% block body_class %}body--client-dashboard{% endblock %}
+{% block layout_classes %}layout--client-dashboard{% endblock %}
+{% block content_classes %}content--dashboard{% endblock %}
+{% block footer %}
+<footer class="footer">
+    {% now "Y" as current_year %}
+    <span>© {{ current_year }} Онлайн-касса ВТБ</span>
+    <span class="footer__note">Связаться с администратором: +7 (900) 555-25-25</span>
+</footer>
+{% endblock %}
+{% block messages %}{% endblock %}
+{% block content %}
+{% with latest_transaction=transactions|first %}
+<div class="dashboard">
+    <aside class="sidebar">
+        <div class="sidebar-greeting">
+            Привет, {{ user.first_name|default:user.username }}!
+        </div>
+        <nav class="navigation">
+            <a href="#main" class="nav-item active">
+                <img class="nav-icon" src="{% static 'images/main.png' %}" alt="Главная">
+                <span>Главная</span>
+            </a>
+            <a href="#operations" class="nav-item">
+                <img class="nav-icon" src="{% static 'images/operation.png' %}" alt="Операции">
+                <span>Операции</span>
+            </a>
+            <a href="#history" class="nav-item">
+                <img class="nav-icon" src="{% static 'images/history.png' %}" alt="История">
+                <span>История</span>
+            </a>
+        </nav>
+    </aside>
+
+    <main class="main-content" id="main">
+        <section class="account-stats">
+            <div class="personal-cabinet">
+                <h2 class="cabinet-title">Личный кабинет</h2>
+                <p class="cabinet-description">{{ security_message }}</p>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">Всего операций</div>
+                        <div class="stat-value">{{ total_transactions_count }}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Статус счёта</div>
+                        <div class="stat-value">
+                            {% if account.is_blocked %}
+                                Заблокирован
+                            {% else %}
+                                Активен
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Последняя операция</div>
+                        <div class="stat-value">
+                            {% if latest_transaction %}
+                                <div>{{ latest_transaction.created_at|date:"d.m.Y" }}</div>
+                                <div>{{ latest_transaction.created_at|date:"H:i" }}</div>
+                            {% else %}
+                                Операций пока нет
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                <img src="{% static 'images/lc-shape.png' %}" alt="" class="decorative-shape">
+            </div>
+            <div class="account-card">
+                <div class="card-icon">
+                    <img src="{% static 'images/card-bold.png' %}" alt="Иконка карты" class="card-icon-image">
+                </div>
+                <h3 class="card-title">Мой счёт</h3>
+                <div class="account-number">№ {{ account.account_number }}</div>
+                <div class="balance">{{ account.balance|floatformat:2 }} ₽</div>
+                <div class="account-card__buttons">
+                    <a href="#operations" class="primary-button">Новая операция</a>
+                    <a href="{% if latest_transaction %}{% url 'banking:transaction_receipt' latest_transaction.pk %}{% else %}#{% endif %}"
+                       class="secondary-button {% if not latest_transaction %}disabled{% endif %}"
+                       {% if not latest_transaction %}aria-disabled="true"{% endif %}>
+                        Последняя квитанция
+                    </a>
+                </div>
+            </div>
+        </section>
+
+        <section class="info-cards">
+            <article class="info-card">
+                <h3 class="info-title">Состояние счёта</h3>
+                <p class="info-subtitle">
+                    {% if account.is_blocked %}
+                        Операции недоступны
+                    {% else %}
+                        Можно проводить операции
+                    {% endif %}
+                </p>
+                <p class="info-detail">Счёт создан: {{ account.created_at|date:"d.m.Y" }}</p>
+            </article>
+            <article class="info-card">
+                <h3 class="info-title">Отмена</h3>
+                <p class="info-subtitle">Администратор может отменить транзакцию</p>
+                <p class="info-detail">При отмене баланс восстанавливается автоматически</p>
+            </article>
+            <article class="info-card">
+                <h3 class="info-title">Лимиты</h3>
+                <p class="info-subtitle">Сумма операции должна быть не меньше 10 ₽ и не больше 100 000 ₽</p>
+                <p class="info-detail">Проверка блокировок и остатка</p>
+            </article>
+            <img src="{% static 'images/star.png' %}" alt="" class="info-decorative-image">
+        </section>
+
+        <section class="financial-operations" id="operations">
+            <h2 class="section-title">Финансовые операции</h2>
+            <div class="operations-grid">
+                <article class="operation-card">
+                    <div class="operation-icon">
+                        <img src="{% static 'images/money-operation-plus.png' %}" alt="Пополнение счёта">
+                    </div>
+                    <h3 class="operation-title">Пополнение счёта</h3>
+                    <form method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="form_type" value="deposit">
+                        <label class="input-label" for="{{ deposit_form.amount.id_for_label }}">{{ deposit_form.amount.label }}</label>
+                        {{ deposit_form.amount }}
+                        {% if deposit_form.amount.errors %}
+                            <span class="form-error">{{ deposit_form.amount.errors.0 }}</span>
+                        {% endif %}
+                        <label class="input-label" for="{{ deposit_form.comment.id_for_label }}">{{ deposit_form.comment.label }}</label>
+                        {{ deposit_form.comment }}
+                        {% if deposit_form.comment.errors %}
+                            <span class="form-error">{{ deposit_form.comment.errors.0 }}</span>
+                        {% endif %}
+                        <button type="submit" class="action-button" {% if account.is_blocked %}disabled{% endif %}>
+                            Пополнить счёт
+                        </button>
+                    </form>
+                </article>
+
+                <article class="operation-card">
+                    <div class="operation-icon">
+                        <img src="{% static 'images/money-operation-withdraw.png' %}" alt="Снятие средств">
+                    </div>
+                    <h3 class="operation-title">Снятие средств</h3>
+                    <form method="post" data-balance="{{ account.balance|floatformat:2 }}">
+                        {% csrf_token %}
+                        <input type="hidden" name="form_type" value="withdrawal">
+                        <label class="input-label" for="{{ withdrawal_form.amount.id_for_label }}">{{ withdrawal_form.amount.label }}</label>
+                        {{ withdrawal_form.amount }}
+                        {% if withdrawal_form.amount.errors %}
+                            <span class="form-error">{{ withdrawal_form.amount.errors.0 }}</span>
+                        {% endif %}
+                        <span class="form-error balance-error" style="display: none;">Недостаточно средств на счёте.</span>
+                        <label class="input-label" for="{{ withdrawal_form.comment.id_for_label }}">{{ withdrawal_form.comment.label }}</label>
+                        {{ withdrawal_form.comment }}
+                        {% if withdrawal_form.comment.errors %}
+                            <span class="form-error">{{ withdrawal_form.comment.errors.0 }}</span>
+                        {% endif %}
+                        <button type="submit" class="action-button" {% if account.is_blocked %}disabled{% endif %}>
+                            Создать заявку
+                        </button>
+                    </form>
+                </article>
+
+                <article class="operation-card">
+                    <div class="operation-icon">
+                        <img src="{% static 'images/money-operation-transfer.png' %}" alt="Перевод между счетами">
+                    </div>
+                    <h3 class="operation-title">Перевод между счетами</h3>
+                    <form method="post" data-balance="{{ account.balance|floatformat:2 }}">
+                        {% csrf_token %}
+                        <input type="hidden" name="form_type" value="transfer">
+                        <label class="input-label" for="{{ transfer_form.target_account_number.id_for_label }}">{{ transfer_form.target_account_number.label }}</label>
+                        {{ transfer_form.target_account_number }}
+                        {% if transfer_form.target_account_number.errors %}
+                            <span class="form-error">{{ transfer_form.target_account_number.errors.0 }}</span>
+                        {% endif %}
+                        <label class="input-label" for="{{ transfer_form.amount.id_for_label }}">{{ transfer_form.amount.label }}</label>
+                        {{ transfer_form.amount }}
+                        {% if transfer_form.amount.errors %}
+                            <span class="form-error">{{ transfer_form.amount.errors.0 }}</span>
+                        {% endif %}
+                        <span class="form-error balance-error" style="display: none;">Недостаточно средств на счёте.</span>
+                        <label class="input-label" for="{{ transfer_form.comment.id_for_label }}">{{ transfer_form.comment.label }}</label>
+                        {{ transfer_form.comment }}
+                        {% if transfer_form.comment.errors %}
+                            <span class="form-error">{{ transfer_form.comment.errors.0 }}</span>
+                        {% endif %}
+                        <button type="submit" class="action-button" {% if account.is_blocked %}disabled{% endif %}>
+                            Отправить перевод
+                        </button>
+                    </form>
+                </article>
+            </div>
+        </section>
+
+        <section class="transaction-history" id="history">
+            <h2 class="section-title">История операций</h2>
+            <p class="section-subtitle">Последние 10 действий. Полный журнал доступен администратору.</p>
+            <div class="history-table">
+                <div class="table-header">
+                    <div>Дата</div>
+                    <div>Тип</div>
+                    <div>Счёт получателя</div>
+                    <div>Сумма</div>
+                    <div>Статус</div>
+                    <div>ID операции</div>
+                </div>
+                {% for transaction in transactions %}
+                    <div class="table-row">
+                        <div class="table-cell">
+                            <div class="date">{{ transaction.created_at|date:"d.m.Y" }}</div>
+                            <div class="time">{{ transaction.created_at|date:"H:i" }}</div>
+                        </div>
+                        <div class="table-cell">
+                            {% if transaction.transaction_type == 'deposit' %}
+                                Пополнение
+                            {% elif transaction.transaction_type == 'withdrawal' %}
+                                Снятие
+                            {% elif transaction.transaction_type == 'transfer_out' %}
+                                Перевод отправлен
+                            {% elif transaction.transaction_type == 'transfer_in' %}
+                                Перевод получен
+                            {% else %}
+                                —
+                            {% endif %}
+                        </div>
+                        <div class="table-cell">
+                            {% with cp=transaction.counterparty_account %}
+                                {% if cp %}
+                                    {{ cp.account_number }}
+                                {% else %}
+                                    —
+                                {% endif %}
+                            {% endwith %}
+                        </div>
+                        <div class="table-cell">
+                            {% if transaction.transaction_type == 'withdrawal' or transaction.transaction_type == 'transfer_out' %}
+                                <span class="negative">−{{ transaction.amount|floatformat:2 }} ₽</span>
+                            {% else %}
+                                <span class="positive">+{{ transaction.amount|floatformat:2 }} ₽</span>
+                            {% endif %}
+                        </div>
+                        <div class="table-cell">
+                            {% if transaction.status == 'completed' %}
+                                Завершена
+                            {% elif transaction.status == 'pending' %}
+                                В обработке
+                            {% else %}
+                                Отменена
+                            {% endif %}
+                        </div>
+                        <div class="table-cell">
+                            <a class="table-link" href="{% url 'banking:transaction_receipt' transaction.pk %}">
+                                {{ transaction.reference }}
+                            </a>
+                        </div>
+                    </div>
+                {% empty %}
+                    <div class="table-row">
+                        <div class="table-cell table-empty" style="grid-column: 1 / -1;">
+                            Операций пока нет.
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        </section>
+    </main>
+</div>
+{% endwith %}
+<script>
+(function() {
+    'use strict';
+    document.addEventListener('DOMContentLoaded', function() {
+        var forms = document.querySelectorAll(
+            'form[data-balance]'
+        );
+        forms.forEach(function(form) {
+            var balance = parseFloat(
+                form.getAttribute('data-balance')
+            );
+            var amountInput = form.querySelector(
+                'input[name="amount"]'
+            );
+            var errorSpan = form.querySelector('.balance-error');
+            if (!amountInput || !errorSpan) {
+                return;
+            }
+            function validateAmount() {
+                var value = parseFloat(amountInput.value);
+                if (isNaN(value)) {
+                    errorSpan.style.display = 'none';
+                    return;
+                }
+                if (value > balance) {
+                    errorSpan.style.display = 'block';
+                } else {
+                    errorSpan.style.display = 'none';
+                }
+            }
+            amountInput.addEventListener('input', validateAmount);
+            amountInput.addEventListener('blur', validateAmount);
+            form.addEventListener('submit', function(e) {
+                var value = parseFloat(amountInput.value);
+                if (!isNaN(value) && value > balance) {
+                    e.preventDefault();
+                    errorSpan.style.display = 'block';
+                }
+            });
+        });
+    });
+})();
+</script>
+{% endblock %}
+

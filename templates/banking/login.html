@@ -1,0 +1,55 @@
+{% extends "banking/base.html" %}
+{% load static %}
+{% block title %}Вход в Онлайн-кассу ВТБ{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/login.css' %}">
+{% endblock %}
+{% block body_class %}body--auth{% endblock %}
+{% block layout_classes %}layout--auth{% endblock %}
+{% block content_classes %}content--auth{% endblock %}
+{% block messages %}{% endblock %}
+{% block footer %}{% endblock %}
+{% block topbar %}{% endblock %}
+{% block content %}
+<div class="login-page">
+    <div class="login-page__content">
+        <div class="login-page__title">
+            <img src="{% static 'images/favicon.png' %}" alt="Онлайн-касса ВТБ" class="login-page__favicon">
+            <span class="login-page__title-text">Онлайн-касса ВТБ</span>
+        </div>
+        <section class="login-card">
+        <div class="login-card__logo">
+            <h1>Вход в систему</h1>
+            <p>Используйте данные, выданные банком</p>
+        </div>
+        <form method="post" class="login-form">
+            {% csrf_token %}
+            <div class="login-form__field">
+                <label for="{{ form.username.id_for_label }}">Логин</label>
+                {{ form.username }}
+                {% if form.username.errors %}
+                    <span class="form-error">{{ form.username.errors.0 }}</span>
+                {% endif %}
+            </div>
+            <div class="login-form__field">
+                <label for="{{ form.password.id_for_label }}">Пароль</label>
+                {{ form.password }}
+                {% if form.password.errors %}
+                    <span class="form-error">{{ form.password.errors.0 }}</span>
+                {% endif %}
+            </div>
+            {% if form.non_field_errors %}
+                <div class="alert alert--error">
+                    {{ form.non_field_errors.0 }}
+                </div>
+            {% endif %}
+            <button type="submit" class="login-form__submit">Войти</button>
+            <div class="login-card__notice">
+                Никому не сообщайте свои данные авторизации.
+            </div>
+        </form>
+        </section>
+    </div>
+</div>
+{% endblock %}
+
