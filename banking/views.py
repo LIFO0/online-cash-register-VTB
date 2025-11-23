@@ -276,7 +276,9 @@ class AdminDashboardView(
         transactions = transactions.order_by("-created_at")
         transactions_paginator = Paginator(transactions, 25)
         transaction_page_number = self.request.GET.get("transaction_page", 1)
-        transactions_page = transactions_paginator.get_page(transaction_page_number)
+        transactions_page = transactions_paginator.get_page(
+            transaction_page_number
+        )
 
         total_balance = sum(account.balance for account in accounts)
         total_clients_count = ClientProfile.objects.count()
