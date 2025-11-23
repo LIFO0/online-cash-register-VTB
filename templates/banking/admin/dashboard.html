@@ -250,6 +250,11 @@
                 </div>
             </div>
             <form method="get" class="admin-filter" id="transaction-filter-form">
+                {% for key, value in request.GET.items %}
+                    {% if key != 'date_from' and key != 'date_to' and key != 'transaction_type' and key != 'status' and key != 'client' and key != 'transaction_page' %}
+                        <input type="hidden" name="{{ key }}" value="{{ value }}">
+                    {% endif %}
+                {% endfor %}
                 <div class="form-field">
                     {{ filter_form.date_from.label_tag }}
                     {{ filter_form.date_from }}
@@ -365,6 +370,106 @@
                     </tbody>
                 </table>
             </div>
+            {% if transactions.paginator.count > 0 %}
+                <div class="admin-clients-info">
+                    <span class="admin-clients-info__text">
+                        Показано {{ transactions.start_index }}–{{ transactions.end_index }} из {{ transactions.paginator.count }} транзакций
+                    </span>
+                </div>
+            {% endif %}
+            {% if transactions.has_other_pages %}
+                <div class="admin-pagination">
+                    {% if transactions.has_previous %}
+                        <form method="get" style="display: inline;">
+                            {% for key, value in request.GET.items %}
+                                {% if key != 'transaction_page' %}
+                                    <input type="hidden" name="{{ key }}" value="{{ value }}">
+                                {% endif %}
+                            {% endfor %}
+                            <input type="hidden" name="transaction_page" value="{{ transactions.previous_page_number }}">
+                            <button type="submit" class="admin-pagination__link admin-pagination__link--prev">‹ Предыдущая</button>
+                        </form>
+                    {% else %}
+                        <span class="admin-pagination__link admin-pagination__link--disabled">‹ Предыдущая</span>
+                    {% endif %}
+                    
+                    <div class="admin-pagination__pages">
+                        {% with current=transactions.number total=transactions.paginator.num_pages %}
+                            {% if current != 1 %}
+                                <form method="get" style="display: inline;">
+                                    {% for key, value in request.GET.items %}
+                                        {% if key != 'transaction_page' %}
+                                            <input type="hidden" name="{{ key }}" value="{{ value }}">
+                                        {% endif %}
+                                    {% endfor %}
+                                    <input type="hidden" name="transaction_page" value="1">
+                                    <button type="submit" class="admin-pagination__page">1</button>
+                                </form>
+                            {% else %}
+                                <span class="admin-pagination__page admin-pagination__page--active">1</span>
+                            {% endif %}
+                            
+                            {% if current > 4 %}
+                                <span class="admin-pagination__ellipsis">…</span>
+                            {% endif %}
+                            
+                            {% for num in transactions.paginator.page_range %}
+                                {% if num > 1 and num < total %}
+                                    {% if num >= current|add:'-2' and num <= current|add:'2' %}
+                                        {% if num == current %}
+                                            <span class="admin-pagination__page admin-pagination__page--active">{{ num }}</span>
+                                        {% else %}
+                                            <form method="get" style="display: inline;">
+                                                {% for key, value in request.GET.items %}
+                                                    {% if key != 'transaction_page' %}
+                                                        <input type="hidden" name="{{ key }}" value="{{ value }}">
+                                                    {% endif %}
+                                                {% endfor %}
+                                                <input type="hidden" name="transaction_page" value="{{ num }}">
+                                                <button type="submit" class="admin-pagination__page">{{ num }}</button>
+                                            </form>
+                                        {% endif %}
+                                    {% endif %}
+                                {% endif %}
+                            {% endfor %}
+                            
+                            {% if current < total|add:'-3' %}
+                                <span class="admin-pagination__ellipsis">…</span>
+                            {% endif %}
+                            
+                            {% if total > 1 %}
+                                {% if current != total %}
+                                    <form method="get" style="display: inline;">
+                                        {% for key, value in request.GET.items %}
+                                            {% if key != 'transaction_page' %}
+                                                <input type="hidden" name="{{ key }}" value="{{ value }}">
+                                            {% endif %}
+                                        {% endfor %}
+                                        <input type="hidden" name="transaction_page" value="{{ total }}">
+                                        <button type="submit" class="admin-pagination__page">{{ total }}</button>
+                                    </form>
+                                {% else %}
+                                    <span class="admin-pagination__page admin-pagination__page--active">{{ total }}</span>
+                                {% endif %}
+                            {% endif %}
+                        {% endwith %}
+                    </div>
+                    
+                    {% if transactions.has_next %}
+                        <form method="get" style="display: inline;">
+                            {% for key, value in request.GET.items %}
+                                {% if key != 'transaction_page' %}
+                                    <input type="hidden" name="{{ key }}" value="{{ value }}">
+                                {% endif %}
+                            {% endfor %}
+                            <input type="hidden" name="transaction_page" value="{{ transactions.next_page_number }}">
+                            <button type="submit" class="admin-pagination__link admin-pagination__link--next">Следующая ›</button>
+                        </form>
+                    {% else %}
+                        <span class="admin-pagination__link admin-pagination__link--disabled">Следующая ›</span>
+                    {% endif %}
+                </div>
+            {% endif %}
             </div>
         </section>
     </main>
@@ -417,25 +522,40 @@ document.addEventListener('DOMContentLoaded', function() {
             const newSection = doc.querySelector(sectionSelector);
             
             if (newSection) {
-                const sectionTop = section.getBoundingClientRect().top + window.pageYOffset;
-                
                 section.innerHTML = newSection.innerHTML;
                 
                 window.history.pushState({}, '', url);
                 
-                requestAnimationFrame(() => {
-                    const newSectionTop = section.getBoundingClientRect().top + window.pageYOffset;
-                    window.scrollTo({
-                        top: newSectionTop - 100,
-                        behavior: 'smooth'
-                    });
-                });
-                
                 if (sectionSelector === '[data-clients-section]') {
                     initPaginationHandlers();
                     initAccountBlockHandlers();
+                    requestAnimationFrame(() => {
+                        const sectionTop = section.getBoundingClientRect().top + window.pageYOffset;
+                        window.scrollTo({
+                            top: sectionTop - 100,
+                            behavior: 'smooth'
+                        });
+                    });
                 } else if (sectionSelector === '[data-transactions-section]') {
+                    initTransactionPaginationHandlers();
                     initTransactionCancelHandlers();
+                    // Плавная прокрутка к началу таблицы транзакций
+                    requestAnimationFrame(() => {
+                        const transactionsSectionElement = document.getElementById('transactions');
+                        if (transactionsSectionElement) {
+                            const transactionsTop = transactionsSectionElement.getBoundingClientRect().top + window.pageYOffset;
+                            window.scrollTo({
+                                top: transactionsTop - 100,
+                                behavior: 'smooth'
+                            });
+                        } else {
+                            const sectionTop = section.getBoundingClientRect().top + window.pageYOffset;
+                            window.scrollTo({
+                                top: sectionTop - 100,
+                                behavior: 'smooth'
+                            });
+                        }
+                    });
                 }
             }
         })
@@ -493,10 +613,12 @@ document.addEventListener('DOMContentLoaded', function() {
             const currentUrl = new URL(window.location);
             for (const [key, value] of currentUrl.searchParams.entries()) {
                 if (key !== 'date_from' && key !== 'date_to' && key !== 'transaction_type' && 
-                    key !== 'status' && key !== 'client' && !params.has(key)) {
+                    key !== 'status' && key !== 'client' && key !== 'transaction_page' && !params.has(key)) {
                     params.append(key, value);
                 }
             }
+            
+            params.delete('transaction_page');
             
             const url = window.location.pathname + '?' + params.toString();
             updateSection(transactionsSection, url, '[data-transactions-section]');
@@ -536,6 +658,44 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     initPaginationHandlers();
+    
+    function initTransactionPaginationHandlers() {
+        if (!transactionsSection) return;
+        
+        const paginationForms = transactionsSection.querySelectorAll('form[method="get"]');
+        
+        paginationForms.forEach(form => {
+            // Пропускаем формы фильтрации (они обрабатываются отдельно)
+            const transactionPageInput = form.querySelector('input[name="transaction_page"]');
+            if (!transactionPageInput) return;
+            
+            const newForm = form.cloneNode(true);
+            form.parentNode.replaceChild(newForm, form);
+            
+            newForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const formData = new FormData(newForm);
+                const params = new URLSearchParams();
+                
+                for (const [key, value] of formData.entries()) {
+                    params.append(key, value);
+                }
+                
+                const currentUrl = new URL(window.location);
+                for (const [key, value] of currentUrl.searchParams.entries()) {
+                    if (key !== 'transaction_page' && !params.has(key)) {
+                        params.append(key, value);
+                    }
+                }
+                
+                const url = window.location.pathname + '?' + params.toString();
+                updateSection(transactionsSection, url, '[data-transactions-section]');
+            });
+        });
+    }
+    
+    initTransactionPaginationHandlers();
     
     function initAccountBlockHandlers() {
         if (!clientsSection) return;
